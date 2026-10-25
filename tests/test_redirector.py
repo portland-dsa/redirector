@@ -5,6 +5,7 @@ from flask.testing import FlaskClient
 @pytest.mark.parametrize(
     ("name", "ask", "status", "location"),
     [
+        ("branch.example", 200, 302, "https://chapter.example/branches/branch/"),
         ("kris.branch.example", 200, 302, "https://drive.example/agenda"),
         ("Ralsei.Branch.Example", 200, 302, "http://tea.example/"),
         ("noelle.branch.example", 403, 404, None),

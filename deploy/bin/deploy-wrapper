@@ -11,9 +11,12 @@ set -f   # no globbing before we word-split $SSH_ORIGINAL_COMMAND
 # One instance, so the connecting identity is purely a gate.
 [ "$(id -un)" = deploy-redirector ] || { echo "denied" >&2; exit 1; }
 
-root="/opt/redirector"
-releases="$root/releases"
-current="$root/current"
+# The deploy user owns only releases/, which is why `current` lives there too.
+# /opt/redirector itself stays root-owned: whoever can write it could rename bin/
+# and swap in their own forced command. `current` never collides with an upload,
+# since uploads are named by a 40-hex sha.
+releases="/opt/redirector/releases"
+current="$releases/current"
 max_bytes=$((300 * 1024 * 1024))   # the tar (interpreter + wheels) is ~tens of MB
 
 # shellcheck disable=SC2086 # splitting into words is the point; set -f blocks globs

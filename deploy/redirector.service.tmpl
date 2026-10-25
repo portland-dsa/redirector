@@ -8,7 +8,7 @@ StartLimitBurst=5
 [Service]
 User=redirector
 Group=redirector
-WorkingDirectory=/opt/redirector/current
+WorkingDirectory=/opt/redirector/releases/current
 # Boot-time integrity: verify the extracted tree against the manifest the build
 # emitted, from WorkingDirectory where MANIFEST.sha256 lives. A mismatch aborts the
 # start before the service runs.
@@ -16,7 +16,7 @@ ExecStartPre=/usr/bin/sha256sum -c --quiet --strict MANIFEST.sha256
 # Loopback TCP rather than the box's usual unix socket: Caddy's ask endpoint is a
 # plain HTTP URL, and the reverse proxy shares the one listener. Everything served
 # here comes from public DNS, so a local principal reaching it learns nothing.
-ExecStart=/opt/redirector/current/python/bin/python3 -m waitress --listen=127.0.0.1:5555 redirector.redirector:app
+ExecStart=/opt/redirector/releases/current/python/bin/python3 -m waitress --listen=127.0.0.1:5555 redirector.redirector:app
 Environment=PYTHONDONTWRITEBYTECODE=1
 Environment=HOST_DOMAIN=${host}
 Environment=TARGET_DOMAIN=${target}

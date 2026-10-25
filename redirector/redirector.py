@@ -20,7 +20,7 @@ from werkzeug.wrappers import Response
 
 log = logging.getLogger(__name__)
 
-#: The branch's domain. Only names beneath it get a certificate or a redirect.
+#: The branch's domain. Only it and the names beneath it get a certificate or a redirect.
 ZONE = os.environ["TARGET_DOMAIN"].lower()
 #: The name every served name must CNAME to.
 CNAME_TARGET = dns.name.from_text(f"redirect.{os.environ['HOST_DOMAIN']}")
@@ -59,13 +59,13 @@ def _link(record: bytes) -> str | None:
 def destination(name: str) -> str | None:
     """Where `name` redirects, or None when this service does not serve it.
 
-    A served name sits beneath the branch's domain, CNAMEs to us, and publishes exactly
-    one TXT record holding an absolute http(s) URL. The zone check comes first and is
-    what keeps this from redirecting for anyone else's records: Caddy does not hold the
-    Host header to the certificate's name.
+    A served name is the branch's domain or sits beneath it, CNAMEs to us, and publishes
+    exactly one TXT record holding an absolute http(s) URL. The zone check comes first
+    and is what keeps this from redirecting for anyone else's records: Caddy does not
+    hold the Host header to the certificate's name.
     """
     name = name.lower()
-    if not name.endswith(f".{ZONE}"):
+    if name != ZONE and not name.endswith(f".{ZONE}"):
         return None
     cnames = [r.target for r in _lookup(name, "CNAME") if isinstance(r, CNAME)]
     if CNAME_TARGET not in cnames:
