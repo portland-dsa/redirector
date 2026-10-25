@@ -22,7 +22,7 @@ class ServiceEnv(StrEnum):
 
     #: Our own domain. Branches CNAME their names to `redirect.<host>`.
     Host = "host"
-    #: The branch's domain. Only names beneath it get a certificate or a redirect.
+    #: The branch's domain. Only it and the names beneath it are served.
     Target = "target"
 
 

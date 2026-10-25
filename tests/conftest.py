@@ -12,6 +12,9 @@ os.environ["HOST_DOMAIN"] = "chapter.example"
 
 #: The fake DNS every test resolves against, as (name, type) -> record texts.
 ZONE: dict[tuple[str, str], list[str]] = {
+    # The branch's own root, on a DNS host that allows a CNAME there.
+    ("branch.example", "CNAME"): ["redirect.chapter.example."],
+    ("_redirect.branch.example", "TXT"): ['"https://chapter.example/branches/branch/"'],
     # Kris set everything up right, with the link split across two TXT strings.
     ("kris.branch.example", "CNAME"): ["redirect.chapter.example."],
     ("_redirect.kris.branch.example", "TXT"): ['"https://drive.example/" "agenda"'],
