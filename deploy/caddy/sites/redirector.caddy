@@ -1,0 +1,18 @@
+# Every HTTPS name no other site claims lands here. Certificates are issued on
+# first handshake, and only for names the redirector's ask endpoint approves
+# (global/redirector.caddy) - without that gate Caddy refuses to start.
+https:// {
+	tls {
+		on_demand
+	}
+
+	# JSON access log to the default sink (stderr -> journald), like the other sites.
+	log {
+		format json
+	}
+
+	# Every path on a name redirects to the same link, so drop it. That also keeps
+	# the ask endpoint out of public reach: a public /ask arrives as /.
+	rewrite * /
+	reverse_proxy 127.0.0.1:5555
+}

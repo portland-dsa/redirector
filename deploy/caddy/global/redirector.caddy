@@ -1,0 +1,6 @@
+# Imported inside the root Caddyfile's global options block. On-demand TLS
+# restrictions are global in Caddy, so this gate covers every site that enables
+# on_demand - today only the redirector's catch-all.
+on_demand_tls {
+	ask http://127.0.0.1:5555/ask
+}

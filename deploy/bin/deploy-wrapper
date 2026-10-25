@@ -1,0 +1,105 @@
+#!/usr/bin/env bash
+#
+# deploy-wrapper - the ONLY command the redirector deploy key may run.
+#
+# Installed at /opt/redirector/bin/deploy-wrapper (root-owned, mode 0755) and pinned as
+# the forced command in the deploy user's authorized_keys and in sshd's ForceCommand.
+# Three verbs - `upload <sha> <sha256>`, `activate <sha>`, `is-active` - and nothing else.
+set -euo pipefail
+set -f   # no globbing before we word-split $SSH_ORIGINAL_COMMAND
+
+# One instance, so the connecting identity is purely a gate.
+[ "$(id -un)" = deploy-redirector ] || { echo "denied" >&2; exit 1; }
+
+root="/opt/redirector"
+releases="$root/releases"
+current="$root/current"
+max_bytes=$((300 * 1024 * 1024))   # the tar (interpreter + wheels) is ~tens of MB
+
+# shellcheck disable=SC2086 # splitting into words is the point; set -f blocks globs
+set -- ${SSH_ORIGINAL_COMMAND:-}
+action="${1:-}"
+
+is_sha()    { [[ "${1:-}" =~ ^[0-9a-f]{40}$ ]]; }
+is_sha256() { [[ "${1:-}" =~ ^[0-9a-f]{64}$ ]]; }
+
+case "$action" in
+
+  # upload <sha> <sha256> : stream the release tarball in on stdin, size-check it, and
+  # verify its content digest (computed by CI) BEFORE it is stored - so a corrupt or
+  # oversized stream can never become a runnable release.
+  upload)
+    sha="${2:-}";  is_sha "$sha"     || { echo "bad sha" >&2; exit 2; }
+    want="${3:-}"; is_sha256 "$want" || { echo "bad digest" >&2; exit 2; }
+
+    dest="$releases/$sha"
+    install -d -m 0755 "$dest"
+    tmp="$(mktemp "$dest/.upload.XXXXXX")"
+    trap 'rm -f "$tmp"' EXIT
+    cat > "$tmp"
+    [ "$(stat -c %s "$tmp")" -le "$max_bytes" ] || { echo "upload too large" >&2; exit 2; }
+    got="$(sha256sum "$tmp" | cut -d' ' -f1)"
+    [ "$got" = "$want" ] || { echo "digest mismatch" >&2; exit 2; }
+    mv -f "$tmp" "$dest/redirector.tar.gz"
+    trap - EXIT
+    echo "uploaded $sha"
+    ;;
+
+  # activate <sha> : extract the verified tarball under a jailed path, freeze it
+  # read-only, point `current` at it, and restart.
+  activate)
+    sha="${2:-}"; is_sha "$sha" || { echo "bad sha" >&2; exit 2; }
+    tar="$releases/$sha/redirector.tar.gz"
+    [ -f "$tar" ] || { echo "no such release" >&2; exit 2; }
+    tree="$releases/$sha/tree"
+
+    # Jail extraction: refuse any member that is absolute or escapes via `..`, so a
+    # verified-but-malicious tarball cannot write outside the release directory. The
+    # sha256 gate proves the bytes; this proves the layout.
+    if tar -tzf "$tar" | grep -Eq '(^/|(^|/)\.\.(/|$))'; then
+      echo "unsafe tar member" >&2; exit 2
+    fi
+    # A prior activation of this sha froze its tree read-only below, which also
+    # strips this user's power to unlink inside it - thaw before clearing so a
+    # re-run of the same release is idempotent instead of thousands of rm errors.
+    if [ -e "$tree" ]; then chmod -R u+w "$tree"; fi
+    rm -rf "$tree"; install -d -m 0755 "$tree"
+    tar -xzf "$tar" -C "$tree" --no-same-owner
+
+    # Reject any extracted symlink whose target resolves OUTSIDE the release tree. The
+    # name check above blocks absolute/.. member PATHS; this blocks a symlink whose TARGET
+    # escapes. Internal links are allowed - the bundled interpreter legitimately points
+    # python/bin/python3 at python3.13, which stays inside the tree.
+    root_abs="$(realpath "$tree")"
+    while IFS= read -r -d '' link; do
+      target="$(realpath -m "$link")"
+      case "$target/" in
+        "$root_abs"/*) : ;;  # resolves inside the tree - allowed
+        *) echo "symlink escapes release tree" >&2; rm -rf "$tree"; exit 2 ;;
+      esac
+    done < <(find "$tree" -type l -print0)
+
+    # Freeze read-only. The service runs as a DIFFERENT, less-privileged user that gets
+    # only read access, so the exposed service principal can never write its own code.
+    chmod -R a-w "$tree"
+
+    # Atomic symlink swap: build the new link beside the old one, then rename over it.
+    ln -sfn "$tree/redirector" "$current.new"
+    mv -Tf "$current.new" "$current"
+
+    # The single privileged action; sudoers permits ONLY this exact line. The unit's
+    # ExecStartPre re-verifies the freshly-linked tree against its manifest on start.
+    sudo /usr/bin/systemctl restart redirector
+    echo "activated $sha"
+    ;;
+
+  # is-active : report whether the unit is up (needs no privilege).
+  is-active)
+    systemctl is-active redirector || true
+    ;;
+
+  *)
+    echo "denied" >&2; exit 1
+    ;;
+
+esac

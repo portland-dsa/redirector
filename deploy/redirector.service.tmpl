@@ -1,0 +1,59 @@
+[Unit]
+Description=Redirects branch subdomains to the links in their DNS TXT records
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+[Service]
+User=redirector
+Group=redirector
+WorkingDirectory=/opt/redirector/current
+# Boot-time integrity: verify the extracted tree against the manifest the build
+# emitted, from WorkingDirectory where MANIFEST.sha256 lives. A mismatch aborts the
+# start before the service runs.
+ExecStartPre=/usr/bin/sha256sum -c --quiet --strict MANIFEST.sha256
+# Loopback TCP rather than the box's usual unix socket: Caddy's ask endpoint is a
+# plain HTTP URL, and the reverse proxy shares the one listener. Everything served
+# here comes from public DNS, so a local principal reaching it learns nothing.
+ExecStart=/opt/redirector/current/python/bin/python3 -m waitress --listen=127.0.0.1:5555 redirector.redirector:app
+Environment=PYTHONDONTWRITEBYTECODE=1
+Environment=HOST_DOMAIN=${host}
+Environment=TARGET_DOMAIN=${target}
+
+TimeoutStartSec=60
+Restart=on-failure
+RestartSec=5
+
+# --- sandbox (validate on the box: systemd-analyze security redirector) ----------
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+PrivateUsers=true
+ProtectProc=invisible
+ProcSubset=pid
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+RemoveIPC=true
+UMask=0077
+CapabilityBoundingSet=
+AmbientCapabilities=
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @resources
+# AF_INET/AF_INET6 for the loopback listener and the DNS lookups.
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+MemoryDenyWriteExecute=true
+
+[Install]
+WantedBy=multi-user.target

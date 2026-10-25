@@ -1,0 +1,54 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "redirector"
+version = "0.1.0"
+description = "Redirects a branch's subdomains to the links published in their DNS"
+requires-python = ">=3.13"
+dependencies = [
+    "dnspython>=2.9.0",
+    "flask>=3.1.3",
+    "waitress>=3.0.2",
+]
+
+[dependency-groups]
+dev = [
+    "pyright>=1.1.411",
+    "pytest>=9.1.1",
+    "ruff>=0.15.20",
+]
+
+[tool.uv]
+package = true
+
+# Package only the application; the repo root also holds non-package dirs (deploy/, scripts/,
+# tests/), and setuptools' flat-layout auto-discovery would otherwise refuse the build on
+# seeing more than one top-level candidate.
+[tool.setuptools.packages.find]
+include = ["redirector*"]
+
+[tool.ruff]
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["I"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["redirector"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.pyright]
+reportMissingModuleSource = "none"
+# scripts/redirector_deploy is a standalone uv project: it depends on che-deploya, which lives in
+# its own venv, not this one. It carries its own [tool.pyright] (Linux platform) and is checked
+# against its own environment - so keep it out of the application's type-check pass here.
+exclude = [
+    "**/.venv",
+    "**/__pycache__",
+    "**/.*",
+    "scripts/redirector_deploy",
+]

@@ -1,0 +1,8 @@
+# Shell scripts run on Linux (CI and the deploy box) but may be checked out on
+# Windows. Force LF so a CRLF interpreter line never breaks them.
+*.sh text eol=lf
+
+# Everything under deploy/ lands on the Linux box byte-for-byte - the unit, the
+# wrapper, and the caddy config ship from a workstation checkout, so a CRLF
+# working tree would ship CRLF to systemd, bash, and caddy.
+deploy/** text eol=lf
