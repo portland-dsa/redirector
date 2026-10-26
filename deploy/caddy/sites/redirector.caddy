@@ -16,3 +16,7 @@ https:// {
 	rewrite * /
 	reverse_proxy 127.0.0.1:5555
 }
+
+redirect.portlanddsa.org {
+	abort
+}
